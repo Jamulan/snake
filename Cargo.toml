@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 glium = "0.29.0"
 rust-lm = { git = "https://github.com/jamulan/rust-lm" }
+rand = "0.8.3"

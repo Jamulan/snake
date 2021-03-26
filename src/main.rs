@@ -2,6 +2,8 @@
 extern crate glium;
 extern crate rust_lm;
 
+mod snake;
+
 use glium::{glutin, Surface};
 use rust_lm::Mat4;
 
@@ -46,6 +48,8 @@ fn main() {
     let program =
         glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None)
             .unwrap();
+
+    let mut curr_action: snake::Action = snake::Action::XNeg;
 
     events_loop.run(move |event, _, control_flow| {
         match event {
