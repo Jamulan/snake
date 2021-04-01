@@ -13,9 +13,10 @@ struct Vertex {
     vec_color: (f32, f32, f32),
 }
 
+//noinspection ALL
 fn main() {
     // setup glium
-    let mut events_loop = glium::glutin::event_loop::EventLoop::new();
+    let events_loop = glium::glutin::event_loop::EventLoop::new();
     let wb = glium::glutin::window::WindowBuilder::new()
         .with_inner_size(glium::glutin::dpi::LogicalSize::new(1024.0, 768.0))
         .with_title("Hello world");
@@ -50,6 +51,15 @@ fn main() {
             .unwrap();
 
     let mut curr_action: snake::Action = snake::Action::XNeg;
+    let mut game = snake::Arena::new();
+
+    let transform_matrix = Mat4::identity()
+        .scale_by(
+            2.0 / (game.arena_size.0 as f32),
+            2.0 / (game.arena_size.1 as f32),
+            1.0,
+        )
+        .translate_by(-1.0, -1.0, 0.0);
 
     events_loop.run(move |event, _, control_flow| {
         match event {
@@ -80,22 +90,42 @@ fn main() {
             std::time::Instant::now() + std::time::Duration::from_nanos(16_666_667);
         *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
 
+        game.tick(curr_action);
+
         let mut target = display.draw();
         target.clear_color(0.0, 0.0, 0.0, 1.0);
 
-        // draw main space
-        let points = vec![
-            [-0.5f32, 1.0],
-            [-0.5, -1.0],
-            [0.5, 1.0],
-            [-0.5, -1.0],
-            [0.5, 1.0],
-            [0.5, -1.0],
-        ];
-        let points_proper = points_to_points_proper(points, (0.0, 0.5, 0.0));
+        let radius = 0.5f32;
+        let mut points: Vec<[f32; 2]> = Vec::new();
+        let tmp = game.snake.clone();
+
+        for thing in tmp.iter() {
+            points.push([thing.0 as f32 - radius, thing.1 as f32 - radius]);
+            points.push([thing.0 as f32 - radius, thing.1 as f32 + radius]);
+            points.push([thing.0 as f32 + radius, thing.1 as f32 + radius]);
+
+            points.push([thing.0 as f32 + radius, thing.1 as f32 + radius]);
+            points.push([thing.0 as f32 + radius, thing.1 as f32 - radius]);
+            points.push([thing.0 as f32 - radius, thing.1 as f32 - radius]);
+        }
+        let mut points_proper = points_to_points_proper(points, (0.0, 0.5, 0.0));
+
+        if game.apple_pos.2 {
+            let mut points: Vec<[f32; 2]> = Vec::new();
+            let thing = (game.apple_pos.0, game.apple_pos.1);
+            points.push([thing.0 as f32 - radius, thing.1 as f32 - radius]);
+            points.push([thing.0 as f32 - radius, thing.1 as f32 + radius]);
+            points.push([thing.0 as f32 + radius, thing.1 as f32 + radius]);
+
+            points.push([thing.0 as f32 + radius, thing.1 as f32 + radius]);
+            points.push([thing.0 as f32 + radius, thing.1 as f32 - radius]);
+            points.push([thing.0 as f32 - radius, thing.1 as f32 - radius]);
+
+            points_proper.append(&mut points_to_points_proper(points, (1.0, 0.0, 0.0)));
+        }
 
         let uniforms = uniform! {
-            matrix: Mat4::identity().matrix,
+            matrix: transform_matrix.matrix,
         };
 
         let vertex_buffer = glium::VertexBuffer::new(&display, &points_proper).unwrap();

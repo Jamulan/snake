@@ -10,10 +10,10 @@ pub enum Action {
 
 pub struct Arena {
     // (x, y, distance_from_head)
-    snake: Vec<(u32, u32, u32)>,
+    pub(crate) snake: Vec<(u32, u32)>,
     // (x, y, is_spawned)
-    apple_pos: (u32, u32, bool),
-    arena_size: (u32, u32),
+    pub(crate) apple_pos: (u32, u32, bool),
+    pub(crate) arena_size: (u32, u32),
     length: u32,
 }
 
@@ -25,9 +25,9 @@ impl Arena {
             arena_size: (64, 64),
             length: 3,
         };
-        out.snake.push((32, 32, 0));
-        out.snake.push((32, 33, 1));
-        out.snake.push((32, 34, 2));
+        out.snake.push((32, 32));
+        out.snake.push((32, 33));
+        out.snake.push((32, 34));
         out.gen_apple();
         return out;
     }
@@ -41,7 +41,7 @@ impl Arena {
             );
             for i in 0..self.snake.len() {
                 let chunk = self.snake.get(i);
-                let mut tmp: (u32, u32, u32);
+                let tmp: (u32, u32);
                 if let Some(thing) = chunk {
                     tmp = *thing;
                 } else {
