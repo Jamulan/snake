@@ -69,9 +69,23 @@ fn main() {
                     return;
                 }
                 glutin::event::WindowEvent::KeyboardInput { input, .. } => match input.state {
-                    glutin::event::ElementState::Pressed => {
-                        println!("{}", input.scancode);
-                    }
+                    glutin::event::ElementState::Pressed => match input.scancode {
+                        103 => {
+                            curr_action = snake::Action::YPos;
+                        }
+                        108 => {
+                            curr_action = snake::Action::YNeg;
+                        }
+                        105 => {
+                            curr_action = snake::Action::XNeg;
+                        }
+                        106 => {
+                            curr_action = snake::Action::XPos;
+                        }
+                        _ => {
+                            println!("{}", input.scancode);
+                        }
+                    },
                     glutin::event::ElementState::Released => match input.scancode {
                         _ => {}
                     },
@@ -86,8 +100,7 @@ fn main() {
             _ => return,
         }
 
-        let next_frame_time =
-            std::time::Instant::now() + std::time::Duration::from_nanos(16_666_667);
+        let next_frame_time = std::time::Instant::now() + std::time::Duration::from_millis(32);
         *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
 
         game.tick(curr_action);
@@ -95,31 +108,31 @@ fn main() {
         let mut target = display.draw();
         target.clear_color(0.0, 0.0, 0.0, 1.0);
 
-        let radius = 0.5f32;
+        let side_length = 1.0f32;
         let mut points: Vec<[f32; 2]> = Vec::new();
         let tmp = game.snake.clone();
 
         for thing in tmp.iter() {
-            points.push([thing.0 as f32 - radius, thing.1 as f32 - radius]);
-            points.push([thing.0 as f32 - radius, thing.1 as f32 + radius]);
-            points.push([thing.0 as f32 + radius, thing.1 as f32 + radius]);
+            points.push([thing.0 as f32, thing.1 as f32]);
+            points.push([thing.0 as f32, thing.1 as f32 + side_length]);
+            points.push([thing.0 as f32 + side_length, thing.1 as f32 + side_length]);
 
-            points.push([thing.0 as f32 + radius, thing.1 as f32 + radius]);
-            points.push([thing.0 as f32 + radius, thing.1 as f32 - radius]);
-            points.push([thing.0 as f32 - radius, thing.1 as f32 - radius]);
+            points.push([thing.0 as f32 + side_length, thing.1 as f32 + side_length]);
+            points.push([thing.0 as f32 + side_length, thing.1 as f32]);
+            points.push([thing.0 as f32, thing.1 as f32]);
         }
         let mut points_proper = points_to_points_proper(points, (0.0, 0.5, 0.0));
 
         if game.apple_pos.2 {
             let mut points: Vec<[f32; 2]> = Vec::new();
             let thing = (game.apple_pos.0, game.apple_pos.1);
-            points.push([thing.0 as f32 - radius, thing.1 as f32 - radius]);
-            points.push([thing.0 as f32 - radius, thing.1 as f32 + radius]);
-            points.push([thing.0 as f32 + radius, thing.1 as f32 + radius]);
+            points.push([thing.0 as f32, thing.1 as f32]);
+            points.push([thing.0 as f32, thing.1 as f32 + side_length]);
+            points.push([thing.0 as f32 + side_length, thing.1 as f32 + side_length]);
 
-            points.push([thing.0 as f32 + radius, thing.1 as f32 + radius]);
-            points.push([thing.0 as f32 + radius, thing.1 as f32 - radius]);
-            points.push([thing.0 as f32 - radius, thing.1 as f32 - radius]);
+            points.push([thing.0 as f32 + side_length, thing.1 as f32 + side_length]);
+            points.push([thing.0 as f32 + side_length, thing.1 as f32]);
+            points.push([thing.0 as f32, thing.1 as f32]);
 
             points_proper.append(&mut points_to_points_proper(points, (1.0, 0.0, 0.0)));
         }
