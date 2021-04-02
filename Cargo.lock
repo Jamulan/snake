@@ -1031,11 +1031,11 @@ dependencies = [
 
 [[package]]
 name = "snake"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
- "glium",
- "rand",
- "rust-lm",
+    "glium",
+    "rand",
+    "rust-lm",
 ]
 
 [[package]]

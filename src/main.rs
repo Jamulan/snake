@@ -5,17 +5,14 @@ extern crate rust_lm;
 mod snake;
 
 fn main() {
+    run_human_playable();
+}
+
+fn run_human_playable() {
     let mut curr_action: snake::Action = snake::Action::XNeg;
     let events_loop = glium::glutin::event_loop::EventLoop::new();
     let mut game = snake::Arena::new(&events_loop);
 
-    loop {
-        game.tick(curr_action);
-        game.render();
-    }
-}
-
-fn run_human_playable() {
     events_loop.run(move |event, _, control_flow| {
         match event {
             glium::glutin::event::Event::WindowEvent { event, .. } => match event {
