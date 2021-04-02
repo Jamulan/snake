@@ -1,4 +1,6 @@
+use glium::{glutin, Surface};
 use rand::Rng;
+use rust_lm::Mat4;
 
 #[derive(Copy, Clone)]
 pub enum Action {
@@ -8,33 +10,91 @@ pub enum Action {
     YNeg,
 }
 
+#[derive(Copy, Clone)]
+struct Vertex {
+    position: [f32; 2],
+    vec_color: (f32, f32, f32),
+}
+
 pub struct Arena {
     // (x, y, distance_from_head)
     pub(crate) snake: Vec<(i32, i32)>,
     // (x, y, is_spawned)
     pub(crate) apple_pos: (i32, i32, bool),
     pub(crate) arena_size: (i32, i32),
+    display: glium::Display,
+    program: glium::Program,
+    transform_matrix: Mat4,
 }
 
 impl Arena {
-    pub fn new() -> Arena {
+    pub fn new(events_loop: &glutin::event_loop::EventLoop<()>) -> Arena {
+        let wb = glium::glutin::window::WindowBuilder::new()
+            .with_inner_size(glium::glutin::dpi::LogicalSize::new(640.0, 640.0))
+            .with_title("snake");
+        let cb = glium::glutin::ContextBuilder::new();
+        let display = glium::Display::new(wb, cb, events_loop).unwrap();
+
+        implement_vertex!(Vertex, position, vec_color);
+
+        let vertex_shader_src = r#"
+        #version 140
+        in vec2 position;
+        in vec3 vec_color;
+        out vec3 my_color;
+        uniform mat4 matrix;
+        void main() {
+            my_color = vec_color;
+            gl_Position = matrix * vec4(position, 0.0, 1.0);
+        }
+    "#;
+
+        let fragment_shader_src = r#"
+        #version 140
+        in vec3 my_color;
+        out vec4 color;
+        void main() {
+            color = vec4(my_color, 1.0);
+        }
+    "#;
+
+        let program =
+            glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None)
+                .unwrap();
+
+        let arena_size = (64, 64);
+
+        let transform_matrix = Mat4::identity()
+            .scale_by(
+                2.0 / (arena_size.0 as f32),
+                2.0 / (arena_size.1 as f32),
+                1.0,
+            )
+            .translate_by(-1.0, -1.0, 0.0);
+
         let mut out = Arena {
             snake: Vec::new(),
             apple_pos: (0, 0, false),
-            arena_size: (64, 64),
+            arena_size: arena_size,
+            display: display,
+            program: program,
+            transform_matrix: transform_matrix,
         };
-        out.snake.push((32, 32));
-        out.snake.push((32, 33));
-        out.snake.push((32, 34));
-        out.gen_apple();
+        out.reset();
         return out;
     }
 
+    fn new_snake(&mut self) {
+        let mut new_snake = Vec::new();
+        new_snake.push((self.arena_size.0 / 2, (self.arena_size.1 / 2) - 2));
+        new_snake.push((self.arena_size.0 / 2, (self.arena_size.1 / 2) - 1));
+        new_snake.push((self.arena_size.0 / 2, (self.arena_size.1 / 2) - 0));
+        self.snake = new_snake;
+    }
+
     fn reset(&mut self) {
-        let new_self = Arena::new();
-        self.snake = new_self.snake;
-        self.apple_pos = new_self.apple_pos;
-        self.arena_size = new_self.arena_size;
+        self.new_snake();
+        self.gen_apple();
     }
 
     fn gen_apple(&mut self) {
@@ -108,4 +168,78 @@ impl Arena {
             self.snake.remove(0);
         }
     }
+
+    pub fn render(&self) {
+        let mut target = self.display.draw();
+
+        target.clear_color(0.0, 0.0, 0.0, 1.0);
+
+        let side_length = 1.0f32;
+        let mut points: Vec<[f32; 2]> = Vec::new();
+
+        for thing in self.snake.iter() {
+            points.push([thing.0 as f32, thing.1 as f32]);
+            points.push([thing.0 as f32, thing.1 as f32 + side_length]);
+            points.push([thing.0 as f32 + side_length, thing.1 as f32 + side_length]);
+
+            points.push([thing.0 as f32 + side_length, thing.1 as f32 + side_length]);
+            points.push([thing.0 as f32 + side_length, thing.1 as f32]);
+            points.push([thing.0 as f32, thing.1 as f32]);
+        }
+        let mut points_proper = points_to_points_proper(points, (0.0, 0.5, 0.0));
+
+        if self.apple_pos.2 {
+            let mut points: Vec<[f32; 2]> = Vec::new();
+            points.push([self.apple_pos.0 as f32, self.apple_pos.1 as f32]);
+            points.push([
+                self.apple_pos.0 as f32,
+                self.apple_pos.1 as f32 + side_length,
+            ]);
+            points.push([
+                self.apple_pos.0 as f32 + side_length,
+                self.apple_pos.1 as f32 + side_length,
+            ]);
+
+            points.push([
+                self.apple_pos.0 as f32 + side_length,
+                self.apple_pos.1 as f32 + side_length,
+            ]);
+            points.push([
+                self.apple_pos.0 as f32 + side_length,
+                self.apple_pos.1 as f32,
+            ]);
+            points.push([self.apple_pos.0 as f32, self.apple_pos.1 as f32]);
+
+            points_proper.append(&mut points_to_points_proper(points, (1.0, 0.0, 0.0)));
+        }
+
+        let uniforms = uniform! {
+            matrix: self.transform_matrix.matrix,
+        };
+
+        let vertex_buffer = glium::VertexBuffer::new(&self.display, &points_proper).unwrap();
+        let index_buffer = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+        target
+            .draw(
+                &vertex_buffer,
+                &index_buffer,
+                &self.program,
+                &uniforms,
+                &Default::default(),
+            )
+            .unwrap();
+
+        target.finish().unwrap();
+    }
+}
+
+fn points_to_points_proper(points: Vec<[f32; 2]>, color: (f32, f32, f32)) -> Vec<Vertex> {
+    let mut points_proper: Vec<Vertex> = Vec::new();
+    for point in points {
+        points_proper.push(Vertex {
+            position: point,
+            vec_color: color,
+        });
+    }
+    return points_proper;
 }
