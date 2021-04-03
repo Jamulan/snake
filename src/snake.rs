@@ -33,7 +33,7 @@ impl Arena {
         let wb = glium::glutin::window::WindowBuilder::new()
             .with_inner_size(glium::glutin::dpi::LogicalSize::new(640.0, 640.0))
             .with_title("snake");
-        let cb = glium::glutin::ContextBuilder::new();
+        let cb = glium::glutin::ContextBuilder::new().with_vsync(true);
         let display = glium::Display::new(wb, cb, events_loop).unwrap();
 
         implement_vertex!(Vertex, position, vec_color);
