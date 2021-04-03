@@ -75,7 +75,6 @@ impl Agent<MyState> for MyAgent {
 
     fn take_action(&mut self, action: &<MyState as State>::A) {
         self.state.reward = Fake::Val(self.game.tick(*action));
-        self.game.render();
 
         let mut head = (0, 0);
         if let Some(thing) = self.game.snake.get(self.game.snake.len() - 1) {
@@ -128,11 +127,26 @@ impl Agent<MyState> for MyAgent {
     }
 }
 
-struct NeverStop {}
+struct NumGames {
+    curr_game: i32,
+    target_games: i32,
+}
 
-impl<S: State> TerminationStrategy<S> for NeverStop {
+impl NumGames {
+    pub fn new(target_games: i32) -> NumGames {
+        return NumGames {
+            curr_game: 0,
+            target_games: target_games,
+        };
+    }
+}
+
+impl<S: State> TerminationStrategy<S> for NumGames {
     fn should_stop(&mut self, state: &S) -> bool {
-        return false;
+        if state.reward() < -0.5 {
+            self.curr_game += 1;
+        }
+        return self.curr_game >= self.target_games;
     }
 }
 
@@ -150,12 +164,29 @@ fn main() {
         game: game,
     };
     agent.take_action(&snake::Action::YPos);
+    let learning = QLearning::new(0.2, 0.01, 2.);
     trainer.train(
         &mut agent,
-        &QLearning::new(0.2, 0.01, 2.),
-        &mut NeverStop {},
+        &learning,
+        &mut NumGames::new(1_000),
         &RandomExploration::new(),
     );
+
+    println!("TRAINING FINISHED -----");
+
+    loop {
+        if let Option::Some(action) = trainer.best_action(agent.current_state()) {
+            agent.take_action(&action);
+        } else {
+            trainer.train(
+                &mut agent,
+                &learning,
+                &mut FixedIterations::new(1),
+                &RandomExploration::new(),
+            )
+        }
+        agent.game.render();
+    }
 }
 
 fn run_human_playable() {

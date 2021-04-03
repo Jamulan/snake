@@ -159,24 +159,25 @@ impl Arena {
 
         if !alive {
             self.reset();
-            return -10.0 * self.snake.len() as f64;
+            return -1.0;
         }
 
         self.snake.push(new_head);
         if new_head.0 == self.apple_pos.0 && new_head.1 == self.apple_pos.1 && self.apple_pos.2 {
             self.gen_apple();
-            return 10.0;
+            return 1.0;
         } else {
             self.snake.remove(0);
-            let new_dist = (new_head.0 - self.apple_pos.0, new_head.1 - self.apple_pos.1);
-            let old_dist = (old_head.0 - self.apple_pos.0, old_head.1 - self.apple_pos.1);
-            if new_dist.0.abs() < old_dist.0.abs() || new_dist.1.abs() < old_dist.1.abs() {
-                return 1.0;
-            } else if new_dist.0.abs() > old_dist.0.abs() || new_dist.1.abs() > old_dist.1.abs() {
-                return -1.0;
-            } else {
-                return 0.0;
-            }
+            // let new_dist = (new_head.0 - self.apple_pos.0, new_head.1 - self.apple_pos.1);
+            // let old_dist = (old_head.0 - self.apple_pos.0, old_head.1 - self.apple_pos.1);
+            // if new_dist.0.abs() < old_dist.0.abs() || new_dist.1.abs() < old_dist.1.abs() {
+            //     return 1.0;
+            // } else if new_dist.0.abs() > old_dist.0.abs() || new_dist.1.abs() > old_dist.1.abs() {
+            //     return -1.0;
+            // } else {
+            //     return 0.0;
+            // }
+            return -0.1;
         }
     }
 
