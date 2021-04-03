@@ -93,12 +93,12 @@ impl Arena {
     }
 
     fn reset(&mut self) {
+        if self.snake.len() > 3 {
+            println!("Apples eaten: {}", self.snake.len() - 3);
+        }
         self.new_snake();
         self.gen_apple();
         self.last_action = Action::YPos;
-        if self.snake.len() > 3 {
-            println!("{}", self.snake.len() - 3);
-        }
     }
 
     fn gen_apple(&mut self) {
