@@ -941,6 +941,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rurel"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13e02472daece1f82c15bf76927c5b67051937d83c10a7e1d5cfda5cb831ac0"
+dependencies = [
+ "rand",
+]
+
+[[package]]
 name = "rust-lm"
 version = "0.1.0"
 source = "git+https://github.com/jamulan/rust-lm#8426b04a57cd098740584d2aff0f14a3afa344fb"
@@ -1031,11 +1040,12 @@ dependencies = [
 
 [[package]]
 name = "snake"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
-    "glium",
-    "rand",
-    "rust-lm",
+ "glium",
+ "rand",
+ "rurel",
+ "rust-lm",
 ]
 
 [[package]]

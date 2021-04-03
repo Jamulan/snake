@@ -2,7 +2,7 @@ use glium::{glutin, Surface};
 use rand::Rng;
 use rust_lm::Mat4;
 
-#[derive(Copy, Clone)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone)]
 pub enum Action {
     XPos,
     XNeg,
@@ -25,10 +25,11 @@ pub struct Arena {
     display: glium::Display,
     program: glium::Program,
     transform_matrix: Mat4,
+    last_action: Action,
 }
 
 impl Arena {
-    pub fn new(events_loop: &glutin::event_loop::EventLoop<()>) -> Arena {
+    pub fn new(events_loop: &glutin::event_loop::EventLoop<()>, arena_size: (i32, i32)) -> Arena {
         let wb = glium::glutin::window::WindowBuilder::new()
             .with_inner_size(glium::glutin::dpi::LogicalSize::new(640.0, 640.0))
             .with_title("snake");
@@ -62,8 +63,6 @@ impl Arena {
             glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None)
                 .unwrap();
 
-        let arena_size = (64, 64);
-
         let transform_matrix = Mat4::identity()
             .scale_by(
                 2.0 / (arena_size.0 as f32),
@@ -79,6 +78,7 @@ impl Arena {
             display: display,
             program: program,
             transform_matrix: transform_matrix,
+            last_action: Action::YPos,
         };
         out.reset();
         return out;
@@ -95,6 +95,10 @@ impl Arena {
     fn reset(&mut self) {
         self.new_snake();
         self.gen_apple();
+        self.last_action = Action::YPos;
+        if self.snake.len() > 3 {
+            println!("{}", self.snake.len() - 3);
+        }
     }
 
     fn gen_apple(&mut self) {
@@ -135,16 +139,36 @@ impl Arena {
 
         match action {
             Action::YPos => {
-                new_head.1 += 1;
+                if let Action::YNeg = self.last_action {
+                    new_head.1 += -1;
+                } else {
+                    new_head.1 += 1;
+                    self.last_action = action;
+                }
             }
             Action::YNeg => {
-                new_head.1 += -1;
+                if let Action::YPos = self.last_action {
+                    new_head.1 += 1;
+                } else {
+                    new_head.1 += -1;
+                    self.last_action = action;
+                }
             }
             Action::XPos => {
-                new_head.0 += 1;
+                if let Action::XNeg = self.last_action {
+                    new_head.0 += -1;
+                } else {
+                    new_head.0 += 1;
+                    self.last_action = action;
+                }
             }
             Action::XNeg => {
-                new_head.0 += -1;
+                if let Action::XPos = self.last_action {
+                    new_head.0 += 1;
+                } else {
+                    new_head.0 += -1;
+                    self.last_action = action;
+                }
             }
         }
 
