@@ -10,13 +10,6 @@ use rurel::strategy::{explore::RandomExploration, learn::QLearning, terminate::F
 use rurel::AgentTrainer;
 use std::hash::{Hash, Hasher};
 
-#[derive(PartialEq, Eq, Hash, Copy, Clone)]
-enum MapState {
-    Empty,
-    SnakeBody,
-    Wall,
-}
-
 #[derive(Clone)]
 enum Fake {
     Val(f64),
@@ -36,7 +29,8 @@ impl Hash for Fake {
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 struct MyState {
-    map: [MapState; 4],
+    // is the given tile Death
+    map: [bool; 4],
     // indicates the direction towards the apple
     curr_apple: (i32, i32),
     reward: Fake,
@@ -66,6 +60,8 @@ impl State for MyState {
 struct MyAgent {
     state: MyState,
     game: snake::Arena,
+    render: bool,
+    time: std::time::Instant,
 }
 
 impl Agent<MyState> for MyAgent {
@@ -75,6 +71,11 @@ impl Agent<MyState> for MyAgent {
 
     fn take_action(&mut self, action: &<MyState as State>::A) {
         self.state.reward = Fake::Val(self.game.tick(*action));
+        if self.render {
+            while self.time > std::time::Instant::now() {}
+            self.time = std::time::Instant::now() + std::time::Duration::from_millis(40);
+            self.game.render();
+        }
 
         let mut head = (0, 0);
         if let Some(thing) = self.game.snake.get(self.game.snake.len() - 1) {
@@ -82,32 +83,32 @@ impl Agent<MyState> for MyAgent {
         } else {
             panic!();
         }
-        self.state.map = [MapState::Empty; 4];
+        self.state.map = [false; 4];
         for item in self.game.snake.iter() {
             if item.0 - head.0 == 1 && item.1 - head.1 == 0 {
-                self.state.map[0] = MapState::SnakeBody;
+                self.state.map[0] = true;
             }
             if item.0 - head.0 == -1 && item.1 - head.1 == 0 {
-                self.state.map[1] = MapState::SnakeBody;
+                self.state.map[1] = true;
             }
             if item.0 - head.0 == 0 && item.1 - head.1 == 1 {
-                self.state.map[2] = MapState::SnakeBody;
+                self.state.map[2] = true;
             }
             if item.0 - head.0 == 0 && item.1 - head.1 == -1 {
-                self.state.map[3] = MapState::SnakeBody;
+                self.state.map[3] = true;
             }
         }
         if head.0 + 1 > self.game.arena_size.0 {
-            self.state.map[0] = MapState::Wall;
+            self.state.map[0] = true;
         }
         if head.0 - 1 < 0 {
-            self.state.map[1] = MapState::Wall;
+            self.state.map[1] = true;
         }
         if head.1 + 1 > self.game.arena_size.0 {
-            self.state.map[2] = MapState::Wall;
+            self.state.map[2] = true;
         }
         if head.1 - 1 < 0 {
-            self.state.map[3] = MapState::Wall;
+            self.state.map[3] = true;
         }
 
         self.state.curr_apple = (
@@ -146,7 +147,7 @@ impl<S: State> TerminationStrategy<S> for NumGames {
         if state.reward() < -0.5 {
             self.curr_game += 1;
         }
-        return self.curr_game >= self.target_games;
+        return self.curr_game == self.target_games;
     }
 }
 
@@ -157,22 +158,24 @@ fn main() {
     let mut trainer = AgentTrainer::new();
     let mut agent = MyAgent {
         state: MyState {
-            map: [MapState::Empty; 4],
+            map: [false; 4],
             curr_apple: (0, 0),
             reward: Fake::Val(0.0),
         },
         game: game,
+        render: false,
+        time: std::time::Instant::now(),
     };
     agent.take_action(&snake::Action::YPos);
-    let learning = QLearning::new(0.2, 0.01, 2.);
     trainer.train(
         &mut agent,
-        &learning,
-        &mut NumGames::new(1_000),
+        &QLearning::new(0.2, 0.01, 2.),
+        &mut NumGames::new(1_000_000),
         &RandomExploration::new(),
     );
 
-    println!("TRAINING FINISHED -----");
+    // println!("TRAINING FINISHED -----");
+    agent.render = true;
 
     loop {
         if let Option::Some(action) = trainer.best_action(agent.current_state()) {
@@ -180,12 +183,12 @@ fn main() {
         } else {
             trainer.train(
                 &mut agent,
-                &learning,
-                &mut FixedIterations::new(1),
+                &QLearning::new(0.1, 0.1, 2.),
+                &mut NumGames::new(1),
                 &RandomExploration::new(),
-            )
+            );
+            // println!("MARK ----- ----- ----- -----");
         }
-        agent.game.render();
     }
 }
 

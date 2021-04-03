@@ -84,14 +84,14 @@ impl Arena {
 
     fn new_snake(&mut self) {
         let mut new_snake = Vec::new();
-        // new_snake.push((self.arena_size.0 / 2, (self.arena_size.1 / 2) - 2));
-        // new_snake.push((self.arena_size.0 / 2, (self.arena_size.1 / 2) - 1));
+        new_snake.push((self.arena_size.0 / 2, (self.arena_size.1 / 2) - 2));
+        new_snake.push((self.arena_size.0 / 2, (self.arena_size.1 / 2) - 1));
         new_snake.push((self.arena_size.0 / 2, (self.arena_size.1 / 2) - 0));
         self.snake = new_snake;
     }
 
     fn reset(&mut self) {
-        println!("length at death: {}", self.snake.len());
+        // println!("length at death: {}", self.snake.len());
         self.new_snake();
         self.gen_apple();
     }
@@ -159,13 +159,13 @@ impl Arena {
 
         if !alive {
             self.reset();
-            return -1.0;
+            return -4.0;
         }
 
         self.snake.push(new_head);
         if new_head.0 == self.apple_pos.0 && new_head.1 == self.apple_pos.1 && self.apple_pos.2 {
             self.gen_apple();
-            return 1.0;
+            return 4.0;
         } else {
             self.snake.remove(0);
             // let new_dist = (new_head.0 - self.apple_pos.0, new_head.1 - self.apple_pos.1);
@@ -177,7 +177,7 @@ impl Arena {
             // } else {
             //     return 0.0;
             // }
-            return -0.1;
+            return -0.01;
         }
     }
 
