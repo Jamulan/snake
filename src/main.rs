@@ -5,6 +5,7 @@ extern crate rust_lm;
 mod snake;
 
 use rurel::mdp::{Agent, State};
+use rurel::strategy::terminate::TerminationStrategy;
 use rurel::strategy::{explore::RandomExploration, learn::QLearning, terminate::FixedIterations};
 use rurel::AgentTrainer;
 
@@ -71,6 +72,14 @@ impl Agent<MyState> for MyAgent {
     }
 }
 
+struct NeverStop {}
+
+impl<S: State> TerminationStrategy<S> for NeverStop {
+    fn should_stop(&mut self, state: &S) -> bool {
+        return false;
+    }
+}
+
 fn main() {
     let events_loop = glium::glutin::event_loop::EventLoop::new();
     let game = snake::Arena::new(&events_loop, (64, 64));
@@ -85,7 +94,7 @@ fn main() {
     trainer.train(
         &mut agent,
         &QLearning::new(0.2, 0.01, 2.),
-        &mut FixedIterations::new(1_000_000),
+        &mut NeverStop {},
         &RandomExploration::new(),
     );
 }
