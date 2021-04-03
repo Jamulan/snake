@@ -103,18 +103,10 @@ impl Arena {
                 rand::thread_rng().gen_range(0..self.arena_size.0),
                 rand::thread_rng().gen_range(0..self.arena_size.1),
             );
-            for i in 0..self.snake.len() {
-                let chunk = self.snake.get(i);
-                let tmp: (i32, i32);
-                if let Some(thing) = chunk {
-                    tmp = *thing;
-                } else {
-                    break;
-                }
-                let chunk = tmp;
-                if test.0 != chunk.0 && test.1 != chunk.1 {
-                    self.apple_pos = (test.0, test.1, true);
-                    break;
+            self.apple_pos = (test.0, test.1, true);
+            for chunk in self.snake.iter() {
+                if test.0 == chunk.0 && test.1 == chunk.1 {
+                    self.apple_pos.2 = false;
                 }
             }
             if self.apple_pos.2 {
