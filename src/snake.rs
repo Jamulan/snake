@@ -25,7 +25,6 @@ pub struct Arena {
     display: glium::Display,
     program: glium::Program,
     transform_matrix: Mat4,
-    last_action: Action,
 }
 
 impl Arena {
@@ -78,7 +77,6 @@ impl Arena {
             display: display,
             program: program,
             transform_matrix: transform_matrix,
-            last_action: Action::YPos,
         };
         out.reset();
         return out;
@@ -86,19 +84,16 @@ impl Arena {
 
     fn new_snake(&mut self) {
         let mut new_snake = Vec::new();
-        new_snake.push((self.arena_size.0 / 2, (self.arena_size.1 / 2) - 2));
-        new_snake.push((self.arena_size.0 / 2, (self.arena_size.1 / 2) - 1));
+        // new_snake.push((self.arena_size.0 / 2, (self.arena_size.1 / 2) - 2));
+        // new_snake.push((self.arena_size.0 / 2, (self.arena_size.1 / 2) - 1));
         new_snake.push((self.arena_size.0 / 2, (self.arena_size.1 / 2) - 0));
         self.snake = new_snake;
     }
 
     fn reset(&mut self) {
-        if self.snake.len() > 3 {
-            println!("Apples eaten: {}", self.snake.len() - 3);
-        }
+        println!("length at death: {}", self.snake.len());
         self.new_snake();
         self.gen_apple();
-        self.last_action = Action::YPos;
     }
 
     fn gen_apple(&mut self) {
@@ -128,7 +123,8 @@ impl Arena {
         }
     }
 
-    pub fn tick(&mut self, action: Action) {
+    // returns reward for tick
+    pub fn tick(&mut self, action: Action) -> f64 {
         let mut new_head = (0, 0);
         if let Some(thing) = self.snake.get(self.snake.len() - 1) {
             new_head.0 = thing.0;
@@ -136,39 +132,20 @@ impl Arena {
         } else {
             panic!();
         }
+        let old_head = new_head.clone();
 
         match action {
             Action::YPos => {
-                if let Action::YNeg = self.last_action {
-                    new_head.1 += -1;
-                } else {
-                    new_head.1 += 1;
-                    self.last_action = action;
-                }
+                new_head.1 += 1;
             }
             Action::YNeg => {
-                if let Action::YPos = self.last_action {
-                    new_head.1 += 1;
-                } else {
-                    new_head.1 += -1;
-                    self.last_action = action;
-                }
+                new_head.1 += -1;
             }
             Action::XPos => {
-                if let Action::XNeg = self.last_action {
-                    new_head.0 += -1;
-                } else {
-                    new_head.0 += 1;
-                    self.last_action = action;
-                }
+                new_head.0 += 1;
             }
             Action::XNeg => {
-                if let Action::XPos = self.last_action {
-                    new_head.0 += 1;
-                } else {
-                    new_head.0 += -1;
-                    self.last_action = action;
-                }
+                new_head.0 += -1;
             }
         }
 
@@ -182,14 +159,24 @@ impl Arena {
 
         if !alive {
             self.reset();
-            return;
+            return -10.0 * self.snake.len() as f64;
         }
 
         self.snake.push(new_head);
         if new_head.0 == self.apple_pos.0 && new_head.1 == self.apple_pos.1 && self.apple_pos.2 {
             self.gen_apple();
+            return 10.0;
         } else {
             self.snake.remove(0);
+            let new_dist = (new_head.0 - self.apple_pos.0, new_head.1 - self.apple_pos.1);
+            let old_dist = (old_head.0 - self.apple_pos.0, old_head.1 - self.apple_pos.1);
+            if new_dist.0.abs() < old_dist.0.abs() || new_dist.1.abs() < old_dist.1.abs() {
+                return 1.0;
+            } else if new_dist.0.abs() > old_dist.0.abs() || new_dist.1.abs() > old_dist.1.abs() {
+                return -1.0;
+            } else {
+                return 0.0;
+            }
         }
     }
 

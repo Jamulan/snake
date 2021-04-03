@@ -8,33 +8,49 @@ use rurel::mdp::{Agent, State};
 use rurel::strategy::terminate::TerminationStrategy;
 use rurel::strategy::{explore::RandomExploration, learn::QLearning, terminate::FixedIterations};
 use rurel::AgentTrainer;
+use std::hash::{Hash, Hasher};
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone)]
 enum MapState {
     Empty,
     SnakeBody,
-    SnakeHead,
-    Apple,
+    Wall,
+}
+
+#[derive(Clone)]
+enum Fake {
+    Val(f64),
+}
+
+impl PartialEq for Fake {
+    fn eq(&self, other: &Self) -> bool {
+        return true;
+    }
+}
+
+impl Eq for Fake {}
+
+impl Hash for Fake {
+    fn hash<H: Hasher>(&self, state: &mut H) {}
 }
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 struct MyState {
-    map: [[MapState; 64]; 64],
+    map: [MapState; 4],
+    // indicates the direction towards the apple
+    curr_apple: (i32, i32),
+    reward: Fake,
 }
 
 impl State for MyState {
     type A = snake::Action;
 
     fn reward(&self) -> f64 {
-        let mut acc = 0.0f64;
-        for thing in self.map.iter() {
-            for item in thing.iter() {
-                if let MapState::SnakeBody = *item {
-                    acc += 1.0f64;
-                }
-            }
+        if let Fake::Val(v) = self.reward {
+            return v;
+        } else {
+            panic!();
         }
-        return acc - 2.0f64;
     }
 
     fn actions(&self) -> Vec<Self::A> {
@@ -58,17 +74,57 @@ impl Agent<MyState> for MyAgent {
     }
 
     fn take_action(&mut self, action: &<MyState as State>::A) {
-        self.game.tick(*action);
+        self.state.reward = Fake::Val(self.game.tick(*action));
         self.game.render();
 
-        let mut last = (0, 0);
-        for item in self.game.snake.iter() {
-            last = (item.0 as usize, item.1 as usize);
-            self.state.map[last.0][last.1] = MapState::SnakeBody;
+        let mut head = (0, 0);
+        if let Some(thing) = self.game.snake.get(self.game.snake.len() - 1) {
+            head = *thing;
+        } else {
+            panic!();
         }
-        self.state.map[last.0][last.1] = MapState::SnakeHead;
-        self.state.map[self.game.apple_pos.0 as usize][self.game.apple_pos.1 as usize] =
-            MapState::Apple;
+        self.state.map = [MapState::Empty; 4];
+        for item in self.game.snake.iter() {
+            if item.0 - head.0 == 1 && item.1 - head.1 == 0 {
+                self.state.map[0] = MapState::SnakeBody;
+            }
+            if item.0 - head.0 == -1 && item.1 - head.1 == 0 {
+                self.state.map[1] = MapState::SnakeBody;
+            }
+            if item.0 - head.0 == 0 && item.1 - head.1 == 1 {
+                self.state.map[2] = MapState::SnakeBody;
+            }
+            if item.0 - head.0 == 0 && item.1 - head.1 == -1 {
+                self.state.map[3] = MapState::SnakeBody;
+            }
+        }
+        if head.0 + 1 > self.game.arena_size.0 {
+            self.state.map[0] = MapState::Wall;
+        }
+        if head.0 - 1 < 0 {
+            self.state.map[1] = MapState::Wall;
+        }
+        if head.1 + 1 > self.game.arena_size.0 {
+            self.state.map[2] = MapState::Wall;
+        }
+        if head.1 - 1 < 0 {
+            self.state.map[3] = MapState::Wall;
+        }
+
+        self.state.curr_apple = (
+            head.0 - self.game.apple_pos.0,
+            head.1 - self.game.apple_pos.1,
+        );
+        if self.state.curr_apple.0 > 0 {
+            self.state.curr_apple.0 = 1;
+        } else if self.state.curr_apple.0 < 0 {
+            self.state.curr_apple.0 = -1;
+        }
+        if self.state.curr_apple.1 > 0 {
+            self.state.curr_apple.1 = 1;
+        } else if self.state.curr_apple.1 < 0 {
+            self.state.curr_apple.1 = -1;
+        }
     }
 }
 
@@ -82,15 +138,18 @@ impl<S: State> TerminationStrategy<S> for NeverStop {
 
 fn main() {
     let events_loop = glium::glutin::event_loop::EventLoop::new();
-    let game = snake::Arena::new(&events_loop, (64, 64));
+    let game = snake::Arena::new(&events_loop, (16, 16));
 
     let mut trainer = AgentTrainer::new();
     let mut agent = MyAgent {
         state: MyState {
-            map: [[MapState::Empty; 64]; 64],
+            map: [MapState::Empty; 4],
+            curr_apple: (0, 0),
+            reward: Fake::Val(0.0),
         },
         game: game,
     };
+    agent.take_action(&snake::Action::YPos);
     trainer.train(
         &mut agent,
         &QLearning::new(0.2, 0.01, 2.),
