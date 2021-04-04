@@ -164,10 +164,11 @@ fn main() {
         render: false,
     };
     agent.take_action(&snake::Action::YPos);
+    println!("how many games to train? ");
     trainer.train(
         &mut agent,
         &QLearning::new(0.2, 0.01, 2.),
-        &mut NumGames::new(1_000_000),
+        &mut NumGames::new(get_input()),
         &RandomExploration::new(),
     );
 
@@ -218,6 +219,12 @@ fn main() {
             // println!("MARK ----- ----- ----- -----");
         }
     });
+}
+
+fn get_input() -> i32 {
+    let mut buffer = String::new();
+    std::io::stdin().read_line(&mut buffer).expect("Failed");
+    buffer.trim().parse::<i32>().unwrap()
 }
 
 fn run_human_playable() {

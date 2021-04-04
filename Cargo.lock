@@ -1042,10 +1042,10 @@ dependencies = [
 name = "snake"
 version = "0.3.3"
 dependencies = [
-    "glium",
-    "rand",
-    "rurel",
-    "rust-lm",
+ "glium",
+ "rand",
+ "rurel",
+ "rust-lm",
 ]
 
 [[package]]
