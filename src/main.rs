@@ -4,12 +4,13 @@ extern crate rust_lm;
 
 mod snake;
 
-use glium::backend::glutin::glutin::event::WindowEvent;
 use rurel::mdp::{Agent, State};
-use rurel::strategy::terminate::TerminationStrategy;
-use rurel::strategy::{explore::RandomExploration, learn::QLearning, terminate::FixedIterations};
+use rurel::strategy::terminate::{FixedIterations, TerminationStrategy};
+use rurel::strategy::{explore::RandomExploration, learn::QLearning};
 use rurel::AgentTrainer;
 use std::hash::{Hash, Hasher};
+use std::ops::Add;
+use std::sync::mpsc::RecvTimeoutError::Timeout;
 
 #[derive(Clone)]
 enum Fake {
@@ -17,7 +18,7 @@ enum Fake {
 }
 
 impl PartialEq for Fake {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         return true;
     }
 }
@@ -25,13 +26,13 @@ impl PartialEq for Fake {
 impl Eq for Fake {}
 
 impl Hash for Fake {
-    fn hash<H: Hasher>(&self, state: &mut H) {}
+    fn hash<H: Hasher>(&self, _state: &mut H) {}
 }
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 struct MyState {
     // is the given tile Death
-    map: [bool; 4],
+    map: [[bool; 3]; 3],
     // indicates the direction towards the apple
     curr_apple: (i32, i32),
     reward: Fake,
@@ -81,32 +82,29 @@ impl Agent<MyState> for MyAgent {
         } else {
             panic!();
         }
-        self.state.map = [false; 4];
-        for item in self.game.snake.iter() {
-            if item.0 - head.0 == 1 && item.1 - head.1 == 0 {
-                self.state.map[0] = true;
+        // populate self.state.map
+        {
+            self.state.map = [[false; 3]; 3];
+            let bounds = (self.state.map.len() as i32, self.state.map[0].len() as i32);
+            let local_head = (bounds.0 / 2, bounds.1 / 2);
+            for i in 0..bounds.0 {
+                for j in 0..bounds.1 {
+                    let test = (i - local_head.0 + head.0, j - local_head.1 + head.1);
+                    for item in self.game.snake.iter() {
+                        if item.0 == test.0 && item.1 == test.1 {
+                            self.state.map[i as usize][j as usize] = true;
+                            break;
+                        }
+                    }
+                    if test.0 < 0
+                        || test.1 < 0
+                        || test.0 >= self.game.arena_size.0
+                        || test.1 >= self.game.arena_size.1
+                    {
+                        self.state.map[i as usize][j as usize] = true;
+                    }
+                }
             }
-            if item.0 - head.0 == -1 && item.1 - head.1 == 0 {
-                self.state.map[1] = true;
-            }
-            if item.0 - head.0 == 0 && item.1 - head.1 == 1 {
-                self.state.map[2] = true;
-            }
-            if item.0 - head.0 == 0 && item.1 - head.1 == -1 {
-                self.state.map[3] = true;
-            }
-        }
-        if head.0 + 1 > self.game.arena_size.0 {
-            self.state.map[0] = true;
-        }
-        if head.0 - 1 < 0 {
-            self.state.map[1] = true;
-        }
-        if head.1 + 1 > self.game.arena_size.0 {
-            self.state.map[2] = true;
-        }
-        if head.1 - 1 < 0 {
-            self.state.map[3] = true;
         }
 
         self.state.curr_apple = (
@@ -122,6 +120,30 @@ impl Agent<MyState> for MyAgent {
             self.state.curr_apple.1 = 1;
         } else if self.state.curr_apple.1 < 0 {
             self.state.curr_apple.1 = -1;
+        }
+    }
+}
+
+struct TimePassed {
+    termination_time: std::time::Instant,
+}
+
+impl TimePassed {
+    pub fn new(time_to_train: std::time::Duration) -> TimePassed {
+        TimePassed {
+            termination_time: std::time::Instant::now() + time_to_train,
+        }
+    }
+}
+
+impl<S: State> TerminationStrategy<S> for TimePassed {
+    fn should_stop(&mut self, _state: &S) -> bool {
+        if let Option::Some(_) =
+            std::time::Instant::now().checked_duration_since(self.termination_time)
+        {
+            true
+        } else {
+            false
         }
     }
 }
@@ -156,7 +178,7 @@ fn main() {
     let mut trainer = AgentTrainer::new();
     let mut agent = MyAgent {
         state: MyState {
-            map: [false; 4],
+            map: [[false; 3]; 3],
             curr_apple: (0, 0),
             reward: Fake::Val(0.0),
         },
@@ -164,11 +186,10 @@ fn main() {
         render: false,
     };
     agent.take_action(&snake::Action::YPos);
-    println!("how many games to train? ");
     trainer.train(
         &mut agent,
         &QLearning::new(0.2, 0.01, 2.),
-        &mut NumGames::new(get_input()),
+        &mut TimePassed::new(std::time::Duration::from_secs(60 * 1)),
         &RandomExploration::new(),
     );
 
@@ -212,19 +233,13 @@ fn main() {
         } else {
             trainer.train(
                 &mut agent,
-                &QLearning::new(0.1, 0.1, 2.),
+                &QLearning::new(0.1, 0.2, 2.),
                 &mut NumGames::new(1),
                 &RandomExploration::new(),
             );
             // println!("MARK ----- ----- ----- -----");
         }
     });
-}
-
-fn get_input() -> i32 {
-    let mut buffer = String::new();
-    std::io::stdin().read_line(&mut buffer).expect("Failed");
-    buffer.trim().parse::<i32>().unwrap()
 }
 
 fn run_human_playable() {

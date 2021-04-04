@@ -1,6 +1,6 @@
 [package]
 name = "snake"
-version = "0.3.3"
+version = "0.3.4"
 authors = ["jamulan <jamulan@ijuggle5.com>"]
 edition = "2018"
 
