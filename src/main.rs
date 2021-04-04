@@ -4,6 +4,7 @@ extern crate rust_lm;
 
 mod snake;
 
+use glium::backend::glutin::glutin::event::WindowEvent;
 use rurel::mdp::{Agent, State};
 use rurel::strategy::terminate::TerminationStrategy;
 use rurel::strategy::{explore::RandomExploration, learn::QLearning, terminate::FixedIterations};
@@ -61,7 +62,6 @@ struct MyAgent {
     state: MyState,
     game: snake::Arena,
     render: bool,
-    time: std::time::Instant,
 }
 
 impl Agent<MyState> for MyAgent {
@@ -72,8 +72,6 @@ impl Agent<MyState> for MyAgent {
     fn take_action(&mut self, action: &<MyState as State>::A) {
         self.state.reward = Fake::Val(self.game.tick(*action));
         if self.render {
-            while self.time > std::time::Instant::now() {}
-            self.time = std::time::Instant::now() + std::time::Duration::from_millis(40);
             self.game.render();
         }
 
@@ -164,7 +162,6 @@ fn main() {
         },
         game: game,
         render: false,
-        time: std::time::Instant::now(),
     };
     agent.take_action(&snake::Action::YPos);
     trainer.train(
@@ -177,7 +174,38 @@ fn main() {
     // println!("TRAINING FINISHED -----");
     agent.render = true;
 
-    loop {
+    events_loop.run(move |event, _, control_flow| {
+        match event {
+            glium::glutin::event::Event::WindowEvent { event, .. } => match event {
+                glium::glutin::event::WindowEvent::CloseRequested => {
+                    *control_flow = glium::glutin::event_loop::ControlFlow::Exit;
+                    return;
+                }
+                glium::glutin::event::WindowEvent::KeyboardInput { input, .. } => match input.state
+                {
+                    glium::glutin::event::ElementState::Pressed => match input.scancode {
+                        _ => {
+                            println!("{}", input.scancode);
+                        }
+                    },
+                    glium::glutin::event::ElementState::Released => match input.scancode {
+                        _ => {}
+                    },
+                },
+                _ => return,
+            },
+            glium::glutin::event::Event::NewEvents(cause) => match cause {
+                glium::glutin::event::StartCause::ResumeTimeReached { .. } => (),
+                glium::glutin::event::StartCause::Init => (),
+                _ => return,
+            },
+            _ => return,
+        }
+
+        let next_frame_time =
+            std::time::Instant::now() + std::time::Duration::from_nanos(16_666_667 * 2);
+        *control_flow = glium::glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
+
         if let Option::Some(action) = trainer.best_action(agent.current_state()) {
             agent.take_action(&action);
         } else {
@@ -189,7 +217,7 @@ fn main() {
             );
             // println!("MARK ----- ----- ----- -----");
         }
-    }
+    });
 }
 
 fn run_human_playable() {
