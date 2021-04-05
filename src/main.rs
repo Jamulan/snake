@@ -9,10 +9,10 @@ use rurel::strategy::terminate::{FixedIterations, TerminationStrategy};
 use rurel::strategy::{explore::RandomExploration, learn::QLearning};
 use rurel::AgentTrainer;
 use std::hash::{Hash, Hasher};
-use std::ops::Add;
-use std::sync::mpsc::RecvTimeoutError::Timeout;
+use std::io::Write;
+use std::thread::sleep;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum Fake {
     Val(f64),
 }
@@ -29,10 +29,17 @@ impl Hash for Fake {
     fn hash<H: Hasher>(&self, _state: &mut H) {}
 }
 
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
+enum MapState {
+    Empty,
+    Death,
+    Apple,
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 struct MyState {
     // is the given tile Death
-    map: [[bool; 3]; 3],
+    map: [[MapState; 7]; 7],
     // indicates the direction towards the apple
     curr_apple: (i32, i32),
     reward: Fake,
@@ -74,6 +81,7 @@ impl Agent<MyState> for MyAgent {
         self.state.reward = Fake::Val(self.game.tick(*action));
         if self.render {
             self.game.render();
+            sleep(std::time::Duration::from_secs_f64(0.04));
         }
 
         let mut head = (0, 0);
@@ -84,7 +92,7 @@ impl Agent<MyState> for MyAgent {
         }
         // populate self.state.map
         {
-            self.state.map = [[false; 3]; 3];
+            self.state.map = [[MapState::Empty; 7]; 7];
             let bounds = (self.state.map.len() as i32, self.state.map[0].len() as i32);
             let local_head = (bounds.0 / 2, bounds.1 / 2);
             for i in 0..bounds.0 {
@@ -92,16 +100,19 @@ impl Agent<MyState> for MyAgent {
                     let test = (i - local_head.0 + head.0, j - local_head.1 + head.1);
                     for item in self.game.snake.iter() {
                         if item.0 == test.0 && item.1 == test.1 {
-                            self.state.map[i as usize][j as usize] = true;
+                            self.state.map[i as usize][j as usize] = MapState::Death;
                             break;
                         }
+                    }
+                    if test.0 == self.game.apple_pos.0 && test.1 == self.game.apple_pos.1 {
+                        self.state.map[i as usize][j as usize] = MapState::Apple;
                     }
                     if test.0 < 0
                         || test.1 < 0
                         || test.0 >= self.game.arena_size.0
                         || test.1 >= self.game.arena_size.1
                     {
-                        self.state.map[i as usize][j as usize] = true;
+                        self.state.map[i as usize][j as usize] = MapState::Death;
                     }
                 }
             }
@@ -178,7 +189,7 @@ fn main() {
     let mut trainer = AgentTrainer::new();
     let mut agent = MyAgent {
         state: MyState {
-            map: [[false; 3]; 3],
+            map: [[MapState::Empty; 7]; 7],
             curr_apple: (0, 0),
             reward: Fake::Val(0.0),
         },
@@ -189,11 +200,14 @@ fn main() {
     trainer.train(
         &mut agent,
         &QLearning::new(0.2, 0.01, 2.),
-        &mut TimePassed::new(std::time::Duration::from_secs(60 * 1)),
+        &mut TimePassed::new(std::time::Duration::from_secs(60 * 10)),
         &RandomExploration::new(),
     );
 
-    // println!("TRAINING FINISHED -----");
+    println!("TRAINING FINISHED -----");
+    let exported = trainer.export_learned_values();
+    let mut file = std::fs::File::create("trained_hash_table.txt").expect("create failed");
+    file.write_all(format!("{:?}", exported).as_bytes());
     agent.render = true;
 
     events_loop.run(move |event, _, control_flow| {
@@ -233,7 +247,7 @@ fn main() {
         } else {
             trainer.train(
                 &mut agent,
-                &QLearning::new(0.1, 0.2, 2.),
+                &QLearning::new(0.1, 0.1, 2.),
                 &mut NumGames::new(1),
                 &RandomExploration::new(),
             );

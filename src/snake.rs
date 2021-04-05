@@ -2,7 +2,7 @@ use glium::{glutin, Surface};
 use rand::Rng;
 use rust_lm::Mat4;
 
-#[derive(PartialEq, Eq, Hash, Copy, Clone)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
 pub enum Action {
     XPos,
     XNeg,
