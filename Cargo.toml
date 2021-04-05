@@ -1,6 +1,6 @@
 [package]
 name = "snake"
-version = "0.3.4"
+version = "0.3.5"
 authors = ["jamulan <jamulan@ijuggle5.com>"]
 edition = "2018"
 
@@ -11,3 +11,5 @@ glium = "0.29.0"
 rust-lm = { git = "https://github.com/jamulan/rust-lm" }
 rand = "0.8.3"
 rurel = "0.2.0"
+rustbreak = { version = "2.0.0", features = ["ron_enc"] }
+serde = { version = "1.0.125", features = ["derive"] }

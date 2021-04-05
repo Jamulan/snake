@@ -1,18 +1,24 @@
 #[macro_use]
 extern crate glium;
 extern crate rust_lm;
+extern crate rustbreak;
 
 mod snake;
 
+use crate::snake::Action;
 use rurel::mdp::{Agent, State};
 use rurel::strategy::terminate::{FixedIterations, TerminationStrategy};
 use rurel::strategy::{explore::RandomExploration, learn::QLearning};
 use rurel::AgentTrainer;
+use rustbreak::backend::PathBackend;
+use rustbreak::{deser::Ron, Database, PathDatabase};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::thread::sleep;
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 enum Fake {
     Val(f64),
 }
@@ -29,17 +35,16 @@ impl Hash for Fake {
     fn hash<H: Hasher>(&self, _state: &mut H) {}
 }
 
-#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 enum MapState {
     Empty,
     Death,
-    Apple,
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 struct MyState {
     // is the given tile Death
-    map: [[MapState; 7]; 7],
+    map: [[MapState; 5]; 5],
     // indicates the direction towards the apple
     curr_apple: (i32, i32),
     reward: Fake,
@@ -92,20 +97,21 @@ impl Agent<MyState> for MyAgent {
         }
         // populate self.state.map
         {
-            self.state.map = [[MapState::Empty; 7]; 7];
+            self.state.map = [[MapState::Empty; 5]; 5];
             let bounds = (self.state.map.len() as i32, self.state.map[0].len() as i32);
             let local_head = (bounds.0 / 2, bounds.1 / 2);
             for i in 0..bounds.0 {
                 for j in 0..bounds.1 {
+                    // if i != local_head.0 && j != local_head.1 {
+                    //     self.state.map[i as usize][j as usize] = MapState::Empty;
+                    //     continue;
+                    // }
                     let test = (i - local_head.0 + head.0, j - local_head.1 + head.1);
                     for item in self.game.snake.iter() {
                         if item.0 == test.0 && item.1 == test.1 {
                             self.state.map[i as usize][j as usize] = MapState::Death;
                             break;
                         }
-                    }
-                    if test.0 == self.game.apple_pos.0 && test.1 == self.game.apple_pos.1 {
-                        self.state.map[i as usize][j as usize] = MapState::Apple;
                     }
                     if test.0 < 0
                         || test.1 < 0
@@ -189,25 +195,41 @@ fn main() {
     let mut trainer = AgentTrainer::new();
     let mut agent = MyAgent {
         state: MyState {
-            map: [[MapState::Empty; 7]; 7],
+            map: [[MapState::Empty; 5]; 5],
             curr_apple: (0, 0),
             reward: Fake::Val(0.0),
         },
         game: game,
         render: false,
     };
+    let db =
+        match PathDatabase::<HashMap<MyState, HashMap<snake::Action, f64>>, Ron>::load_from_path_or(
+            format!("trained_hash_table_{}.txt", agent.state.map.len())
+                .parse()
+                .unwrap(),
+            HashMap::new(),
+        ) {
+            Ok(db) => db,
+            Err(e) => {
+                panic!(e);
+            }
+        };
+    db.read(|db| {
+        trainer.import_state(db.clone());
+    });
     agent.take_action(&snake::Action::YPos);
-    trainer.train(
-        &mut agent,
-        &QLearning::new(0.2, 0.01, 2.),
-        &mut TimePassed::new(std::time::Duration::from_secs(60 * 10)),
-        &RandomExploration::new(),
-    );
+    for _ in 0..1 {
+        trainer.train(
+            &mut agent,
+            &QLearning::new(0.2, 0.01, 2.),
+            &mut TimePassed::new(std::time::Duration::from_secs(60 * 1)),
+            &RandomExploration::new(),
+        );
+        save_db(&db, &trainer);
+    }
 
     println!("TRAINING FINISHED -----");
-    let exported = trainer.export_learned_values();
-    let mut file = std::fs::File::create("trained_hash_table.txt").expect("create failed");
-    file.write_all(format!("{:?}", exported).as_bytes());
+
     agent.render = true;
 
     events_loop.run(move |event, _, control_flow| {
@@ -251,9 +273,25 @@ fn main() {
                 &mut NumGames::new(1),
                 &RandomExploration::new(),
             );
+            save_db(&db, &trainer);
             // println!("MARK ----- ----- ----- -----");
         }
     });
+}
+
+fn save_db(
+    db: &Database<HashMap<MyState, HashMap<snake::Action, f64>>, PathBackend, Ron>,
+    trainer: &AgentTrainer<MyState>,
+) {
+    let exported = trainer.export_learned_values();
+    db.write(|db| {
+        for key in exported.keys() {
+            db.insert(*key, exported[key].clone());
+        }
+    });
+    if let Err(e) = db.save() {
+        panic!(e);
+    }
 }
 
 fn run_human_playable() {

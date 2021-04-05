@@ -1,8 +1,9 @@
 use glium::{glutin, Surface};
 use rand::Rng;
 use rust_lm::Mat4;
+use serde::{Deserialize, Serialize};
 
-#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum Action {
     XPos,
     XNeg,
