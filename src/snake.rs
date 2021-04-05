@@ -1,3 +1,5 @@
+use crate::{Fake, MapState, MyState};
+use glium::backend::glutin::glutin::event::{ElementState, WindowEvent};
 use glium::{glutin, Surface};
 use rand::Rng;
 use rust_lm::Mat4;
@@ -19,17 +21,24 @@ struct Vertex {
 
 pub struct Arena {
     // (x, y, distance_from_head)
-    pub(crate) snake: Vec<(i32, i32)>,
+    pub snake: Vec<(i32, i32)>,
     // (x, y, is_spawned)
-    pub(crate) apple_pos: (i32, i32, bool),
-    pub(crate) arena_size: (i32, i32),
+    pub apple_pos: (i32, i32, bool),
+    pub arena_size: (i32, i32),
+    pub reward_for_last_action: f64,
+    pub state: MyState,
+    bound: usize,
     display: glium::Display,
     program: glium::Program,
     transform_matrix: Mat4,
 }
 
 impl Arena {
-    pub fn new(events_loop: &glutin::event_loop::EventLoop<()>, arena_size: (i32, i32)) -> Arena {
+    pub fn new(
+        arena_size: (i32, i32),
+        bound: usize,
+        events_loop: &glutin::event_loop::EventLoop<()>,
+    ) -> Arena {
         let wb = glium::glutin::window::WindowBuilder::new()
             .with_inner_size(glium::glutin::dpi::LogicalSize::new(640.0, 640.0))
             .with_title("snake");
@@ -75,6 +84,9 @@ impl Arena {
             snake: Vec::new(),
             apple_pos: (0, 0, false),
             arena_size: arena_size,
+            reward_for_last_action: 0.0,
+            state: MyState::new(bound),
+            bound: bound,
             display: display,
             program: program,
             transform_matrix: transform_matrix,
@@ -91,7 +103,7 @@ impl Arena {
         self.snake = new_snake;
     }
 
-    fn reset(&mut self) {
+    pub fn reset(&mut self) {
         // println!("length at death: {}", self.snake.len());
         self.new_snake();
         self.gen_apple();
@@ -116,8 +128,52 @@ impl Arena {
         }
     }
 
+    fn update_state(&mut self) {
+        self.state.reward = Fake::Val(self.reward_for_last_action);
+
+        let mut head = (0, 0);
+        if let Some(thing) = self.snake.get(self.snake.len() - 1) {
+            head = *thing;
+        } else {
+            panic!();
+        }
+        // populate self.state.map
+        {
+            self.state.map = Vec::with_capacity(self.bound);
+            for i in 0..self.bound {
+                self.state.map.push(Vec::with_capacity(self.bound));
+                for j in 0..self.bound {
+                    self.state.map[i].push(MapState::Empty);
+                }
+            }
+            let local_head = (self.bound as i32 / 2, self.bound as i32 / 2);
+            for i in 0..self.bound as i32 {
+                for j in 0..self.bound as i32 {
+                    // if i != local_head.0 && j != local_head.1 {
+                    //     self.state.map[i as usize][j as usize] = MapState::Empty;
+                    //     continue;
+                    // }
+                    let test = (i - local_head.0 + head.0, j - local_head.1 + head.1);
+                    for item in self.snake.iter() {
+                        if item.0 == test.0 && item.1 == test.1 {
+                            self.state.map[i as usize][j as usize] = MapState::Death;
+                            break;
+                        }
+                    }
+                    if test.0 < 0
+                        || test.1 < 0
+                        || test.0 >= self.arena_size.0
+                        || test.1 >= self.arena_size.1
+                    {
+                        self.state.map[i as usize][j as usize] = MapState::Death;
+                    }
+                }
+            }
+        }
+    }
+
     // returns reward for tick
-    pub fn tick(&mut self, action: Action) -> f64 {
+    pub fn tick(&mut self, action: Action) {
         let mut new_head = (0, 0);
         if let Some(thing) = self.snake.get(self.snake.len() - 1) {
             new_head.0 = thing.0;
@@ -152,26 +208,25 @@ impl Arena {
 
         if !alive {
             self.reset();
-            return -4.0;
+            self.reward_for_last_action = -4.0;
         }
 
         self.snake.push(new_head);
         if new_head.0 == self.apple_pos.0 && new_head.1 == self.apple_pos.1 && self.apple_pos.2 {
             self.gen_apple();
-            return 4.0;
+            self.reward_for_last_action = 4.0;
         } else {
             self.snake.remove(0);
-            // let new_dist = (new_head.0 - self.apple_pos.0, new_head.1 - self.apple_pos.1);
-            // let old_dist = (old_head.0 - self.apple_pos.0, old_head.1 - self.apple_pos.1);
-            // if new_dist.0.abs() < old_dist.0.abs() || new_dist.1.abs() < old_dist.1.abs() {
-            //     return 1.0;
-            // } else if new_dist.0.abs() > old_dist.0.abs() || new_dist.1.abs() > old_dist.1.abs() {
-            //     return -1.0;
-            // } else {
-            //     return 0.0;
-            // }
-            return -0.01;
+            self.reward_for_last_action - 0.01;
         }
+        self.update_state();
+    }
+
+    pub fn run_loop<F>(&mut self, get_action: F, render: bool)
+    where
+        F: Fn(Option<glutin::event::ScanCode>) -> Option<Action>,
+    {
+        let mut curr_action = Action::YPos;
     }
 
     pub fn render(&self) {
