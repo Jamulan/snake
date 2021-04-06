@@ -166,4 +166,4 @@ fabric.properties
 # Cargo.lock
 
 # End of https://www.toptal.com/developers/gitignore/api/rust
-/snake_ai_database.txt
+/snake_ai_database.ron

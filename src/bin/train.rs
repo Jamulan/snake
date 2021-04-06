@@ -6,9 +6,10 @@ fn main() {
         bound: 3,
         arena_size: (16, 16),
         learning: QLearning::new(0.2, 0.01, 2.),
+        render: false,
     };
 
     let mut ai = AiComponents::new(config);
 
-    ai.train(1);
+    ai.train();
 }

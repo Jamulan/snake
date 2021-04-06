@@ -6,6 +6,7 @@ fn main() {
         bound: 3,
         arena_size: (16, 16),
         learning: QLearning::new(0.2, 0.1, 2.),
+        render: true,
     };
 
     test(config);

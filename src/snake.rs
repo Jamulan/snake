@@ -1,5 +1,4 @@
 use crate::{Fake, MapState, MyState};
-use glium::backend::glutin::glutin::event::{ElementState, WindowEvent};
 use glium::{glutin, Surface};
 use rand::Rng;
 use rust_lm::Mat4;
@@ -31,6 +30,7 @@ pub struct Arena {
     display: glium::Display,
     program: glium::Program,
     transform_matrix: Mat4,
+    render: bool,
 }
 
 impl Arena {
@@ -38,10 +38,12 @@ impl Arena {
         arena_size: (i32, i32),
         bound: usize,
         events_loop: &glutin::event_loop::EventLoop<()>,
+        render: bool,
     ) -> Arena {
         let wb = glium::glutin::window::WindowBuilder::new()
             .with_inner_size(glium::glutin::dpi::LogicalSize::new(640.0, 640.0))
-            .with_title("snake");
+            .with_title("snake")
+            .with_visible(render);
         let cb = glium::glutin::ContextBuilder::new().with_vsync(true);
         let display = glium::Display::new(wb, cb, events_loop).unwrap();
 
@@ -90,6 +92,7 @@ impl Arena {
             display: display,
             program: program,
             transform_matrix: transform_matrix,
+            render: render,
         };
         out.reset();
         return out;
@@ -131,7 +134,7 @@ impl Arena {
     fn update_state(&mut self) {
         self.state.reward = Fake::Val(self.reward_for_last_action);
 
-        let mut head = (0, 0);
+        let head: (i32, i32);
         if let Some(thing) = self.snake.get(self.snake.len() - 1) {
             head = *thing;
         } else {
@@ -142,7 +145,7 @@ impl Arena {
             self.state.map = Vec::with_capacity(self.bound);
             for i in 0..self.bound {
                 self.state.map.push(Vec::with_capacity(self.bound));
-                for j in 0..self.bound {
+                for _ in 0..self.bound {
                     self.state.map[i].push(MapState::Empty);
                 }
             }
@@ -172,8 +175,8 @@ impl Arena {
         }
     }
 
-    // returns reward for tick
-    pub fn tick(&mut self, action: Action) {
+    // returns true if the snake died this tick
+    pub fn tick(&mut self, action: Action) -> bool {
         let mut new_head = (0, 0);
         if let Some(thing) = self.snake.get(self.snake.len() - 1) {
             new_head.0 = thing.0;
@@ -181,7 +184,6 @@ impl Arena {
         } else {
             panic!();
         }
-        let old_head = new_head.clone();
 
         match action {
             Action::YPos => {
@@ -209,6 +211,9 @@ impl Arena {
         if !alive {
             self.reset();
             self.reward_for_last_action = -4.0;
+            self.update_state();
+            self.render();
+            return true;
         }
 
         self.snake.push(new_head);
@@ -217,19 +222,17 @@ impl Arena {
             self.reward_for_last_action = 4.0;
         } else {
             self.snake.remove(0);
-            self.reward_for_last_action - 0.01;
+            self.reward_for_last_action = -0.01;
         }
         self.update_state();
+        self.render();
+        return false;
     }
 
-    pub fn run_loop<F>(&mut self, get_action: F, render: bool)
-    where
-        F: Fn(Option<glutin::event::ScanCode>) -> Option<Action>,
-    {
-        let mut curr_action = Action::YPos;
-    }
-
-    pub fn render(&self) {
+    fn render(&self) {
+        if !self.render {
+            return;
+        }
         let mut target = self.display.draw();
 
         target.clear_color(0.0, 0.0, 0.0, 1.0);
