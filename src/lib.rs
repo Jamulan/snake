@@ -6,7 +6,7 @@ extern crate rustbreak;
 mod snake;
 
 use rurel::mdp::{Agent, State};
-use rurel::strategy::terminate::{FixedIterations, TerminationStrategy};
+use rurel::strategy::terminate::TerminationStrategy;
 use rurel::strategy::{explore::RandomExploration, learn::QLearning};
 use rurel::AgentTrainer;
 use rustbreak::backend::PathBackend;
@@ -119,6 +119,7 @@ pub fn test(config: Config) {
     };
     let mut trainer = AgentTrainer::new();
     load_db(&db, &mut trainer, config.bound);
+    let mut time_start = std::time::Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -132,6 +133,8 @@ pub fn test(config: Config) {
                     glium::glutin::event::ElementState::Pressed => match input.scancode {
                         28 => {
                             load_db(&db, &mut trainer, config.bound);
+                            agent.reset();
+                            return;
                         }
                         _ => {
                             println!("{}", input.scancode);
@@ -156,17 +159,11 @@ pub fn test(config: Config) {
 
         if let Some(action) = trainer.best_action(&agent.state) {
             curr_action = action;
-        } else {
-            trainer.train(
-                &mut agent,
-                &config.learning,
-                &mut FixedIterations::new(0),
-                &RandomExploration::new(),
-            );
         }
 
-        if agent.tick(curr_action) {
+        if agent.tick(curr_action) || time_start.elapsed().as_secs() > 60 {
             load_db(&db, &mut trainer, config.bound);
+            time_start = std::time::Instant::now();
         }
     });
 }

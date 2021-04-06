@@ -140,6 +140,19 @@ impl Arena {
         } else {
             panic!();
         }
+        self.state.curr_apple.0 = self.apple_pos.0 - head.0;
+        if self.state.curr_apple.0 > 0 {
+            self.state.curr_apple.0 = 1;
+        } else if self.state.curr_apple.0 < 0 {
+            self.state.curr_apple.0 = -1;
+        }
+        self.state.curr_apple.1 = self.apple_pos.0 - head.0;
+        if self.state.curr_apple.1 > 0 {
+            self.state.curr_apple.1 = 1;
+        } else if self.state.curr_apple.1 < 0 {
+            self.state.curr_apple.1 = -1;
+        }
+
         // populate self.state.map
         {
             self.state.map = Vec::with_capacity(self.bound);
