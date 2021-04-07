@@ -1094,12 +1094,12 @@ dependencies = [
 name = "snake_ai"
 version = "0.4.2"
 dependencies = [
-    "glium",
-    "rand",
-    "rurel",
-    "rust-lm",
-    "rustbreak",
-    "serde",
+ "glium",
+ "rand",
+ "rurel",
+ "rust-lm",
+ "rustbreak",
+ "serde",
 ]
 
 [[package]]
