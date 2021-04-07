@@ -11,6 +11,4 @@ fn main() {
     };
 
     test(config);
-
-    db.lock().unwrap().save().unwrap();
 }

@@ -17,7 +17,7 @@ fn main() {
             let config = Config {
                 bound: i,
                 arena_size: (16, 16),
-                learning: QLearning::new(0.1, 0.1, 2.),
+                learning: QLearning::new(0.1, 0.01, 2.),
                 db: db_real,
             };
             let mut ai = AiComponents::new(config);
