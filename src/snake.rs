@@ -27,23 +27,46 @@ pub struct Arena {
     pub reward_for_last_action: f64,
     pub state: MyState,
     bound: usize,
-    display: glium::Display,
-    program: glium::Program,
+    display: Option<glium::Display>,
+    program: Option<glium::Program>,
     transform_matrix: Mat4,
     render: bool,
 }
 
 impl Arena {
-    pub fn new(
+    pub fn new(arena_size: (i32, i32), bound: usize) -> Arena {
+        let transform_matrix = Mat4::identity()
+            .scale_by(
+                2.0 / (arena_size.0 as f32),
+                2.0 / (arena_size.1 as f32),
+                1.0,
+            )
+            .translate_by(-1.0, -1.0, 0.0);
+
+        let mut out = Arena {
+            snake: Vec::new(),
+            apple_pos: (0, 0, false),
+            arena_size: arena_size,
+            reward_for_last_action: 0.0,
+            state: MyState::new(bound),
+            bound: bound,
+            display: None,
+            program: None,
+            transform_matrix: transform_matrix,
+            render: false,
+        };
+        out.reset();
+        return out;
+    }
+
+    pub fn new_render(
         arena_size: (i32, i32),
         bound: usize,
         events_loop: &glutin::event_loop::EventLoop<()>,
-        render: bool,
     ) -> Arena {
         let wb = glium::glutin::window::WindowBuilder::new()
             .with_inner_size(glium::glutin::dpi::LogicalSize::new(640.0, 640.0))
-            .with_title("snake")
-            .with_visible(render);
+            .with_title("snake");
         let cb = glium::glutin::ContextBuilder::new().with_vsync(true);
         let display = glium::Display::new(wb, cb, events_loop).unwrap();
 
@@ -74,27 +97,10 @@ impl Arena {
             glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None)
                 .unwrap();
 
-        let transform_matrix = Mat4::identity()
-            .scale_by(
-                2.0 / (arena_size.0 as f32),
-                2.0 / (arena_size.1 as f32),
-                1.0,
-            )
-            .translate_by(-1.0, -1.0, 0.0);
-
-        let mut out = Arena {
-            snake: Vec::new(),
-            apple_pos: (0, 0, false),
-            arena_size: arena_size,
-            reward_for_last_action: 0.0,
-            state: MyState::new(bound),
-            bound: bound,
-            display: display,
-            program: program,
-            transform_matrix: transform_matrix,
-            render: render,
-        };
-        out.reset();
+        let mut out = Self::new(arena_size, bound);
+        out.display = Some(display);
+        out.program = Some(program);
+        out.render = true;
         return out;
     }
 
@@ -246,66 +252,75 @@ impl Arena {
         if !self.render {
             return;
         }
-        let mut target = self.display.draw();
+        if let Some(display) = &self.display {
+            if let Some(program) = &self.program {
+                let mut target = display.draw();
 
-        target.clear_color(0.0, 0.0, 0.0, 1.0);
+                target.clear_color(0.0, 0.0, 0.0, 1.0);
 
-        let side_length = 1.0f32;
-        let mut points: Vec<[f32; 2]> = Vec::new();
+                let side_length = 1.0f32;
+                let mut points: Vec<[f32; 2]> = Vec::new();
 
-        for thing in self.snake.iter() {
-            points.push([thing.0 as f32, thing.1 as f32]);
-            points.push([thing.0 as f32, thing.1 as f32 + side_length]);
-            points.push([thing.0 as f32 + side_length, thing.1 as f32 + side_length]);
+                for thing in self.snake.iter() {
+                    points.push([thing.0 as f32, thing.1 as f32]);
+                    points.push([thing.0 as f32, thing.1 as f32 + side_length]);
+                    points.push([thing.0 as f32 + side_length, thing.1 as f32 + side_length]);
 
-            points.push([thing.0 as f32 + side_length, thing.1 as f32 + side_length]);
-            points.push([thing.0 as f32 + side_length, thing.1 as f32]);
-            points.push([thing.0 as f32, thing.1 as f32]);
+                    points.push([thing.0 as f32 + side_length, thing.1 as f32 + side_length]);
+                    points.push([thing.0 as f32 + side_length, thing.1 as f32]);
+                    points.push([thing.0 as f32, thing.1 as f32]);
+                }
+                let mut points_proper = points_to_points_proper(points, (0.0, 0.5, 0.0));
+
+                if self.apple_pos.2 {
+                    let mut points: Vec<[f32; 2]> = Vec::new();
+                    points.push([self.apple_pos.0 as f32, self.apple_pos.1 as f32]);
+                    points.push([
+                        self.apple_pos.0 as f32,
+                        self.apple_pos.1 as f32 + side_length,
+                    ]);
+                    points.push([
+                        self.apple_pos.0 as f32 + side_length,
+                        self.apple_pos.1 as f32 + side_length,
+                    ]);
+
+                    points.push([
+                        self.apple_pos.0 as f32 + side_length,
+                        self.apple_pos.1 as f32 + side_length,
+                    ]);
+                    points.push([
+                        self.apple_pos.0 as f32 + side_length,
+                        self.apple_pos.1 as f32,
+                    ]);
+                    points.push([self.apple_pos.0 as f32, self.apple_pos.1 as f32]);
+
+                    points_proper.append(&mut points_to_points_proper(points, (1.0, 0.0, 0.0)));
+                }
+
+                let uniforms = uniform! {
+                    matrix: self.transform_matrix.matrix,
+                };
+
+                let vertex_buffer = glium::VertexBuffer::new(display, &points_proper).unwrap();
+                let index_buffer =
+                    glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+                target
+                    .draw(
+                        &vertex_buffer,
+                        &index_buffer,
+                        program,
+                        &uniforms,
+                        &Default::default(),
+                    )
+                    .unwrap();
+
+                target.finish().unwrap();
+            } else {
+                panic!();
+            }
+        } else {
+            panic!();
         }
-        let mut points_proper = points_to_points_proper(points, (0.0, 0.5, 0.0));
-
-        if self.apple_pos.2 {
-            let mut points: Vec<[f32; 2]> = Vec::new();
-            points.push([self.apple_pos.0 as f32, self.apple_pos.1 as f32]);
-            points.push([
-                self.apple_pos.0 as f32,
-                self.apple_pos.1 as f32 + side_length,
-            ]);
-            points.push([
-                self.apple_pos.0 as f32 + side_length,
-                self.apple_pos.1 as f32 + side_length,
-            ]);
-
-            points.push([
-                self.apple_pos.0 as f32 + side_length,
-                self.apple_pos.1 as f32 + side_length,
-            ]);
-            points.push([
-                self.apple_pos.0 as f32 + side_length,
-                self.apple_pos.1 as f32,
-            ]);
-            points.push([self.apple_pos.0 as f32, self.apple_pos.1 as f32]);
-
-            points_proper.append(&mut points_to_points_proper(points, (1.0, 0.0, 0.0)));
-        }
-
-        let uniforms = uniform! {
-            matrix: self.transform_matrix.matrix,
-        };
-
-        let vertex_buffer = glium::VertexBuffer::new(&self.display, &points_proper).unwrap();
-        let index_buffer = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
-        target
-            .draw(
-                &vertex_buffer,
-                &index_buffer,
-                &self.program,
-                &uniforms,
-                &Default::default(),
-            )
-            .unwrap();
-
-        target.finish().unwrap();
     }
 }
 

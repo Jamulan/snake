@@ -46,8 +46,7 @@ impl AiComponents {
                 panic!();
             }
         };
-        let event_loop = glium::glutin::event_loop::EventLoop::new();
-        let agent = snake::Arena::new(config.arena_size, config.bound, &event_loop, config.render);
+        let agent = snake::Arena::new(config.arena_size, config.bound);
 
         AiComponents {
             config: config,
@@ -102,7 +101,7 @@ impl AiComponents {
 
 pub fn test(config: Config) {
     let event_loop = glium::glutin::event_loop::EventLoop::new();
-    let mut agent = snake::Arena::new(config.arena_size, config.bound, &event_loop, config.render);
+    let mut agent = snake::Arena::new_render(config.arena_size, config.bound, &event_loop);
     let mut curr_action = snake::Action::YPos;
 
     let db = match PathDatabase::<
@@ -209,7 +208,7 @@ fn load_db(
 
 pub fn play_human(config: Config) {
     let event_loop = glium::glutin::event_loop::EventLoop::new();
-    let mut game = snake::Arena::new(config.arena_size, config.bound, &event_loop, config.render);
+    let mut game = snake::Arena::new_render(config.arena_size, config.bound, &event_loop);
     let mut curr_action = snake::Action::YPos;
 
     event_loop.run(move |event, _, control_flow| {
