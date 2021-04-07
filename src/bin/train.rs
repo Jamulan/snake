@@ -1,12 +1,14 @@
-use rurel::strategy::learn::QLearning;
-use snake_ai::{get_database, AiComponents, Config};
 use std::thread;
+
+use rurel::strategy::learn::QLearning;
+
+use snake_ai::{get_database, AiComponents, Config};
 
 fn main() {
     let mut handles = vec![];
     let db = get_database();
 
-    for i in 2..9 {
+    for i in 2..10 {
         if i % 2 == 0 {
             continue;
         }
@@ -35,4 +37,6 @@ fn main() {
     for handle in handles {
         handle.join().unwrap();
     }
+
+    db.lock().unwrap().save().unwrap();
 }

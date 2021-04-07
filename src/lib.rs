@@ -3,7 +3,9 @@ extern crate glium;
 extern crate rust_lm;
 extern crate rustbreak;
 
-mod snake;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::sync::{Arc, Mutex};
 
 use rurel::mdp::{Agent, State};
 use rurel::strategy::terminate::{FixedIterations, TerminationStrategy};
@@ -12,9 +14,8 @@ use rurel::AgentTrainer;
 use rustbreak::backend::PathBackend;
 use rustbreak::{deser::Ron, Database, PathDatabase};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Mutex};
+
+mod snake;
 
 pub struct Config {
     pub bound: usize,
@@ -116,7 +117,7 @@ impl AiComponents {
     }
 }
 
-pub fn test(config: Config) {
+pub fn test(mut config: Config) {
     let event_loop = glium::glutin::event_loop::EventLoop::new();
     let mut agent = snake::Arena::new_render(config.arena_size, config.bound, &event_loop);
     let mut curr_action = snake::Action::YPos;
@@ -137,6 +138,27 @@ pub fn test(config: Config) {
                 glium::glutin::event::WindowEvent::KeyboardInput { input, .. } => match input.state
                 {
                     glium::glutin::event::ElementState::Pressed => match input.scancode {
+                        // number 1
+                        2 => {
+                            config.bound = 3;
+                            agent.new_bound(3);
+                        }
+                        // number 2
+                        3 => {
+                            config.bound = 5;
+                            agent.new_bound(5);
+                        }
+                        // number 3
+                        4 => {
+                            config.bound = 7;
+                            agent.new_bound(7);
+                        }
+                        // number 4
+                        5 => {
+                            config.bound = 9;
+                            agent.new_bound(9);
+                        }
+                        // enter key
                         28 => {
                             load_from_db(&db, &mut trainer, config.bound);
                             agent.reset();

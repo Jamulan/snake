@@ -1,4 +1,5 @@
 use rurel::strategy::learn::QLearning;
+
 use snake_ai::{get_database, test, Config};
 
 fn main() {
@@ -10,4 +11,6 @@ fn main() {
     };
 
     test(config);
+
+    db.lock().unwrap().save().unwrap();
 }

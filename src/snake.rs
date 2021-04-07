@@ -1,8 +1,9 @@
-use crate::{Fake, MapState, MyState};
 use glium::{glutin, Surface};
 use rand::Rng;
 use rust_lm::Mat4;
 use serde::{Deserialize, Serialize};
+
+use crate::{Fake, MapState, MyState};
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum Action {
@@ -135,6 +136,14 @@ impl Arena {
                 break;
             }
         }
+    }
+
+    pub fn new_bound(&mut self, bound: usize) {
+        if bound % 2 == 0 {
+            panic!("bound must be odd");
+        }
+        self.bound = bound;
+        self.update_state();
     }
 
     fn update_state(&mut self) {
