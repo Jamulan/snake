@@ -3,9 +3,11 @@ extern crate glium;
 extern crate rust_lm;
 extern crate rustbreak;
 
-mod snake;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::io::Write;
+use std::thread::sleep;
 
-use crate::snake::Action;
 use rurel::mdp::{Agent, State};
 use rurel::strategy::terminate::{FixedIterations, TerminationStrategy};
 use rurel::strategy::{explore::RandomExploration, learn::QLearning};
@@ -13,10 +15,10 @@ use rurel::AgentTrainer;
 use rustbreak::backend::PathBackend;
 use rustbreak::{deser::Ron, Database, PathDatabase};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
-use std::io::Write;
-use std::thread::sleep;
+
+use crate::snake::Action;
+
+mod snake;
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 enum Fake {
@@ -44,7 +46,7 @@ enum MapState {
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 struct MyState {
     // is the given tile Death
-    map: [[MapState; 5]; 5],
+    map: [[MapState; 3]; 3],
     // indicates the direction towards the apple
     curr_apple: (i32, i32),
     reward: Fake,
@@ -97,15 +99,15 @@ impl Agent<MyState> for MyAgent {
         }
         // populate self.state.map
         {
-            self.state.map = [[MapState::Empty; 5]; 5];
+            self.state.map = [[MapState::Empty; 3]; 3];
             let bounds = (self.state.map.len() as i32, self.state.map[0].len() as i32);
             let local_head = (bounds.0 / 2, bounds.1 / 2);
             for i in 0..bounds.0 {
                 for j in 0..bounds.1 {
-                    // if i != local_head.0 && j != local_head.1 {
-                    //     self.state.map[i as usize][j as usize] = MapState::Empty;
-                    //     continue;
-                    // }
+                    if i != local_head.0 && j != local_head.1 {
+                        self.state.map[i as usize][j as usize] = MapState::Empty;
+                        continue;
+                    }
                     let test = (i - local_head.0 + head.0, j - local_head.1 + head.1);
                     for item in self.game.snake.iter() {
                         if item.0 == test.0 && item.1 == test.1 {
@@ -195,7 +197,7 @@ fn main() {
     let mut trainer = AgentTrainer::new();
     let mut agent = MyAgent {
         state: MyState {
-            map: [[MapState::Empty; 5]; 5],
+            map: [[MapState::Empty; 3]; 3],
             curr_apple: (0, 0),
             reward: Fake::Val(0.0),
         },
