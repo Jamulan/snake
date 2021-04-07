@@ -6,7 +6,7 @@ extern crate rustbreak;
 mod snake;
 
 use rurel::mdp::{Agent, State};
-use rurel::strategy::terminate::TerminationStrategy;
+use rurel::strategy::terminate::{FixedIterations, TerminationStrategy};
 use rurel::strategy::{explore::RandomExploration, learn::QLearning};
 use rurel::AgentTrainer;
 use rustbreak::backend::PathBackend;
@@ -14,19 +14,36 @@ use rustbreak::{deser::Ron, Database, PathDatabase};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::sync::{Arc, Mutex};
 
 pub struct Config {
     pub bound: usize,
     pub arena_size: (i32, i32),
     pub learning: QLearning,
-    pub render: bool,
+    pub db: Arc<
+        Mutex<
+            Database<
+                HashMap<usize, HashMap<MyState, HashMap<snake::Action, f64>>>,
+                PathBackend,
+                Ron,
+            >,
+        >,
+    >,
 }
 
 pub struct AiComponents {
     config: Config,
     trainer: AgentTrainer<MyState>,
     agent: snake::Arena,
-    db: Database<HashMap<usize, HashMap<MyState, HashMap<snake::Action, f64>>>, PathBackend, Ron>,
+    db: Arc<
+        Mutex<
+            Database<
+                HashMap<usize, HashMap<MyState, HashMap<snake::Action, f64>>>,
+                PathBackend,
+                Ron,
+            >,
+        >,
+    >,
 }
 
 impl AiComponents {
@@ -34,26 +51,18 @@ impl AiComponents {
         if config.bound % 2 == 0 {
             panic!("Config.bound must be odd");
         }
-        let db = match PathDatabase::<
-            HashMap<usize, HashMap<MyState, HashMap<snake::Action, f64>>>,
-            Ron,
-        >::load_from_path_or(
-            "snake_ai_database.ron".parse().unwrap(), HashMap::default()
-        ) {
-            Ok(db) => db,
-            Err(e) => {
-                println!("{:?}", e);
-                panic!();
-            }
-        };
         let agent = snake::Arena::new(config.arena_size, config.bound);
 
-        AiComponents {
+        let db = config.db.clone();
+
+        let mut out = AiComponents {
             config: config,
             trainer: AgentTrainer::new(),
             agent: agent,
             db: db,
-        }
+        };
+        out.reload_db_to_trainer();
+        return out;
     }
 
     pub fn train(&mut self) {
@@ -64,14 +73,14 @@ impl AiComponents {
         let rand_explore = &RandomExploration::new();
         let mut i = 0;
         loop {
-            self.load();
+            self.reload_db_to_trainer();
             self.trainer.train(
                 &mut self.agent,
                 &self.config.learning,
                 &mut TimePassed::new(std::time::Duration::from_secs(60)),
                 rand_explore,
             );
-            self.save();
+            self.test_and_train();
 
             i += 1;
             if i == minutes {
@@ -80,22 +89,30 @@ impl AiComponents {
         }
     }
 
-    pub fn train_for_games(&mut self, games: u32) {
-        self.load();
-        self.trainer.train(
-            &mut self.agent,
-            &self.config.learning,
-            &mut NumGames::new(games),
-            &RandomExploration::new(),
-        );
-        self.save();
+    fn test_and_train(&mut self) {
+        loop {
+            if let Some(action) = self.trainer.best_action(self.agent.current_state()) {
+                if self.agent.tick(action) {
+                    return;
+                }
+            } else {
+                self.trainer.train(
+                    &mut self.agent,
+                    &self.config.learning,
+                    &mut NumGames::new(1),
+                    &RandomExploration::new(),
+                );
+                self.save_to_db_from_trainer();
+                return;
+            }
+        }
     }
 
-    fn load(&mut self) {
-        load_db(&self.db, &mut self.trainer, self.config.bound);
+    fn reload_db_to_trainer(&mut self) {
+        load_from_db(&self.db, &mut self.trainer, self.config.bound);
     }
-    fn save(&mut self) {
-        save_db(&self.db, &mut self.trainer, self.config.bound);
+    fn save_to_db_from_trainer(&mut self) {
+        save_to_db(&self.db, &mut self.trainer, self.config.bound);
     }
 }
 
@@ -104,20 +121,10 @@ pub fn test(config: Config) {
     let mut agent = snake::Arena::new_render(config.arena_size, config.bound, &event_loop);
     let mut curr_action = snake::Action::YPos;
 
-    let db = match PathDatabase::<
-        HashMap<usize, HashMap<MyState, HashMap<snake::Action, f64>>>,
-        Ron,
-    >::load_from_path_or(
-        "snake_ai_database.ron".parse().unwrap(), HashMap::default(),
-    ) {
-        Ok(db) => db,
-        Err(e) => {
-            println!("{:?}", e);
-            panic!();
-        }
-    };
+    let db = config.db.clone();
+
     let mut trainer = AgentTrainer::new();
-    load_db(&db, &mut trainer, config.bound);
+    load_from_db(&db, &mut trainer, config.bound);
     let mut time_start = std::time::Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
@@ -131,7 +138,7 @@ pub fn test(config: Config) {
                 {
                     glium::glutin::event::ElementState::Pressed => match input.scancode {
                         28 => {
-                            load_db(&db, &mut trainer, config.bound);
+                            load_from_db(&db, &mut trainer, config.bound);
                             agent.reset();
                             return;
                         }
@@ -158,51 +165,105 @@ pub fn test(config: Config) {
 
         if let Some(action) = trainer.best_action(&agent.state) {
             curr_action = action;
+        } else {
+            trainer.train(
+                &mut agent,
+                &config.learning,
+                &mut FixedIterations::new(1),
+                &RandomExploration::new(),
+            );
+            save_to_db(&db, &mut trainer, config.bound);
         }
 
         if agent.tick(curr_action) || time_start.elapsed().as_secs() > 60 {
-            load_db(&db, &mut trainer, config.bound);
+            load_from_db(&db, &mut trainer, config.bound);
             time_start = std::time::Instant::now();
         }
     });
 }
 
-fn save_db(
-    db: &Database<HashMap<usize, HashMap<MyState, HashMap<snake::Action, f64>>>, PathBackend, Ron>,
-    trainer: &mut AgentTrainer<MyState>,
-    bound: usize,
-) {
-    if let Err(e) = db.write(|db| {
-        let exported = trainer.export_learned_values();
-        db.insert(bound, exported);
-    }) {
-        println!("{:?}", e);
-        panic!();
+pub fn get_database() -> Arc<
+    Mutex<
+        Database<HashMap<usize, HashMap<MyState, HashMap<snake::Action, f64>>>, PathBackend, Ron>,
+    >,
+> {
+    let db = Arc::new(
+        Mutex::new(
+            PathDatabase::<
+                HashMap<usize, HashMap<MyState, HashMap<snake::Action, f64>>>,
+                Ron,
+            >::load_from_path_or(
+                "snake_ai_database.ron".parse().unwrap(), HashMap::default(),
+            )
+                .unwrap(),
+        ),
+    );
+
+    {
+        let db_real = db.lock().unwrap();
+        db_real.load().unwrap();
     }
-    if let Err(e) = db.save() {
-        println!("{:?}", e);
-        panic!();
-    }
+
+    return db;
 }
 
-fn load_db(
-    db: &Database<HashMap<usize, HashMap<MyState, HashMap<snake::Action, f64>>>, PathBackend, Ron>,
+fn save_to_db(
+    db: &Arc<
+        Mutex<
+            Database<
+                HashMap<usize, HashMap<MyState, HashMap<snake::Action, f64>>>,
+                PathBackend,
+                Ron,
+            >,
+        >,
+    >,
     trainer: &mut AgentTrainer<MyState>,
     bound: usize,
 ) {
-    if let Err(e) = db.load() {
-        println!("{:?}", e);
-        panic!();
-    }
+    let db_real = db.lock().unwrap();
+
+    db_real
+        .write(|db| {
+            let exported = trainer.export_learned_values();
+            if let Some(table) = db.get_mut(&bound) {
+                for key in exported.keys() {
+                    if let Some(value) = table.get_mut(key) {
+                        for fin_key in exported[key].keys() {
+                            value.insert(*fin_key, exported[key][fin_key]);
+                        }
+                    } else {
+                        table.insert(key.clone(), exported[key].clone());
+                    }
+                }
+            } else {
+                db.insert(bound, exported);
+            }
+        })
+        .unwrap();
+}
+
+fn load_from_db(
+    db: &Arc<
+        Mutex<
+            Database<
+                HashMap<usize, HashMap<MyState, HashMap<snake::Action, f64>>>,
+                PathBackend,
+                Ron,
+            >,
+        >,
+    >,
+    trainer: &mut AgentTrainer<MyState>,
+    bound: usize,
+) {
+    let db_real = db.lock().unwrap();
     let mut vals = HashMap::new();
-    if let Err(e) = db.read(|db| {
-        if let Some(tmp_vals) = db.get(&bound) {
-            vals = tmp_vals.clone();
-        }
-    }) {
-        println!("{:?}", e);
-        panic!();
-    }
+    db_real
+        .read(|db| {
+            if let Some(tmp_vals) = db.get(&bound) {
+                vals = tmp_vals.clone();
+            }
+        })
+        .unwrap();
     trainer.import_state(vals);
 }
 
