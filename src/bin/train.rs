@@ -3,7 +3,7 @@ use snake_ai::{AiComponents, Config};
 use std::thread;
 
 fn main() {
-    for i in 3..9 {
+    for i in 2..9 {
         if i % 2 == 0 {
             continue;
         }
@@ -19,6 +19,7 @@ fn main() {
 
             ai.train();
         });
+        thread::sleep(std::time::Duration::from_secs(10));
     }
     loop {}
 }
