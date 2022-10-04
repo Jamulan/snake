@@ -192,6 +192,9 @@ impl Arena {
             points.push([thing.0 as f32, thing.1 as f32]);
         }
         let mut points_proper = points_to_points_proper(points, (0.0, 0.5, 0.0));
+        for i in (self.snake.len() * 6) - 6..points_proper.len() {
+            points_proper[i].vec_color = (0.0, 1.0, 0.0);
+        }
 
         if self.apple_pos.2 {
             let mut points: Vec<[f32; 2]> = Vec::new();
